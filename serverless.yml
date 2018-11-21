@@ -22,6 +22,8 @@ provider:
   name: aws
   runtime: go1.x
   region: us-east-2
+  stage: prod
+  profile: personal
 
 package:
  exclude:
