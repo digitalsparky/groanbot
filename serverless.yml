@@ -1,0 +1,42 @@
+# Welcome to Serverless!
+#
+# This file is the main config file for your service.
+# It's very minimal at this point and uses default values.
+# You can always add more config options for more control.
+# We've included some commented out config examples here.
+# Just uncomment any of them to get that config option.
+#
+# For full config options, check the docs:
+#    docs.serverless.com
+#
+# Happy Coding!
+
+service: groanbot # NOTE: update this with your service name
+
+# You can pin your service to only deploy with a specific Serverless version
+# Check out our docs for more details
+# frameworkVersion: "=X.X.X"
+frameworkVersion: ">=1.28.0 <2.0.0"
+
+provider:
+  name: aws
+  runtime: go1.x
+  region: us-east-2
+
+package:
+ exclude:
+   - ./**
+ include:
+   - ./bin/**
+
+functions:
+  tweet:
+    handler: bin/tweet
+    cron:
+      active: true
+      value: '30 12 * * *'
+    environment:
+      TWITTER_CONSUMER_KEY: ${ssm:GROANBOT_TWITTER_CONSUMER_KEY~true}
+      TWITTER_CONSUMER_SECRET: ${ssm:GROANBOT_TWITTER_CONSUMER_SECRET~true}
+      TWITTER_ACCESS_KEY: ${ssm:GROANBOT_TWITTER_ACCESS_KEY~true}
+      TWITTER_ACCESS_SECRET: ${ssm:GROANBOT_TWITTER_ACCESS_SECRET~true}
