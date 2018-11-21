@@ -32,9 +32,8 @@ package:
 functions:
   tweet:
     handler: bin/tweet
-    cron:
-      active: true
-      value: '30 12 * * *'
+    events:
+      - schedule: cron(0 12 * * ? *)
     environment:
       TWITTER_CONSUMER_KEY: ${ssm:GROANBOT_TWITTER_CONSUMER_KEY~true}
       TWITTER_CONSUMER_SECRET: ${ssm:GROANBOT_TWITTER_CONSUMER_SECRET~true}
