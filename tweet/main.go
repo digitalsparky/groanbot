@@ -7,19 +7,49 @@ import (
 	"net/http"
 	"os"
 	"time"
+	"fmt"
 
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/dghubble/oauth1"
 )
 
+// Joke JSON object
 type Joke struct {
-	Id     string `json:"id"`
+	ID     string `json:"id"`
 	Joke   string `json:"joke"`
 	Status int    `json:"status"`
 }
 
-// Retrieve the feed from icanhazdadjoke.com
+// GetSSMValue - Get the encrypted value from SSM
+func GetSSMValue(keyname string) (string, error) {
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Config:            aws.Config{Region: aws.String(os.Getenv("AWS_DEFAULT_REGION"))},
+		SharedConfigState: session.SharedConfigEnable,
+	})
+	if err != nil {
+		return "", err
+
+	}
+
+	ssmsvc := ssm.New(sess, aws.NewConfig().WithRegion(os.Getenv("AWS_DEFAULT_REGION")))
+	withDecryption := true
+	param, err := ssmsvc.GetParameter(&ssm.GetParameterInput{
+		Name:           &keyname,
+		WithDecryption: &withDecryption,
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return *param.Parameter.Value, nil
+}
+
+// GetJoke - Retrieve the feed from icanhazdadjoke.com
 func GetJoke() (Joke, error) {
 	url := "https://icanhazdadjoke.com/"
 
@@ -54,29 +84,8 @@ func GetJoke() (Joke, error) {
 	return joke, nil
 }
 
-// Login to twitter via API and send the tweet
-func SendTweet(tweet string) error {
-	twitterConsumerKey := os.Getenv("TWITTER_CONSUMER_KEY")
-	twitterConsumerSecret := os.Getenv("TWITTER_CONSUMER_SECRET")
-	twitterAccessKey := os.Getenv("TWITTER_ACCESS_KEY")
-	twitterAccessSecret := os.Getenv("TWITTER_ACCESS_SECRET")
-
-	if twitterConsumerKey == "" {
-		return errors.New("Twitter consumer key can not be null")
-	}
-
-	if twitterConsumerSecret == "" {
-		return errors.New("Twitter consumer secret can not be null")
-	}
-
-	if twitterAccessKey == "" {
-		return errors.New("Twitter access key can not be null")
-	}
-
-	if twitterAccessSecret == "" {
-		return errors.New("Twitter access secret can not be null")
-	}
-
+// SendTweet - Login to twitter via API and send the tweet
+func SendTweet(tweet string, twitterAccessKey string, twitterAccessSecret string, twitterConsumerKey string, twitterConsumerSecret string) error {
 	config := oauth1.NewConfig(twitterConsumerKey, twitterConsumerSecret)
 	token := oauth1.NewToken(twitterAccessKey, twitterAccessSecret)
 	httpClient := config.Client(oauth1.NoContext, token)
@@ -91,19 +100,60 @@ func SendTweet(tweet string) error {
 	return nil
 }
 
+// HandleRequest - Handle the incoming Lambda request
 func HandleRequest() (string, error) {
+	// Get the access keys from SSM, we do this first as there's no point continuing if we can't get them.
+	twitterAccessKey, err := GetSSMValue(os.Getenv("TWITTER_ACCESS_KEY"))
+	if err != nil {
+		return "", err
+	}
+
+	twitterAccessSecret, err := GetSSMValue(os.Getenv("TWITTER_ACCESS_SECRET"))
+	if err != nil {
+		return "", err
+	}
+
+	twitterConsumerKey, err := GetSSMValue(os.Getenv("TWITTER_CONSUMER_KEY"))
+	if err != nil {
+		return "", err
+	}
+
+	twitterConsumerSecret, err := GetSSMValue(os.Getenv("TWITTER_CONSUMER_SECRET"))
+	if err != nil {
+		return "", err
+	}
+
+	if twitterConsumerKey == "" {
+		return "", errors.New("Twitter consumer key can not be null")
+	}
+
+	if twitterConsumerSecret == "" {
+		return "", errors.New("Twitter consumer secret can not be null")
+	}
+
+	if twitterAccessKey == "" {
+		return "", errors.New("Twitter access key can not be null")
+	}
+
+	if twitterAccessSecret == "" {
+		return "", errors.New("Twitter access secret can not be null")
+	}
+
+	// Fetch the latest joke
 	joke, err := GetJoke()
 	if err != nil {
 		// we have an error, oopsies, let's skip this round.
 		return "", err
 	}
 
-	sendError := SendTweet(joke.Joke)
+	jokeTweet := fmt.Sprintf("%s #dadjokes", joke.Joke)
+
+	// Send the joke to twitter
+	sendError := SendTweet(jokeTweet, twitterAccessKey, twitterAccessSecret, twitterConsumerKey, twitterConsumerSecret)
 	if sendError != nil {
 		return "Failed to send", sendError
-	} else {
-		return "Sent!", nil
 	}
+	return "Sent!", nil
 }
 
 func main() {
