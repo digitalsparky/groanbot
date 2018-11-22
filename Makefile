@@ -6,7 +6,7 @@ mkbindir:
 	(test ! -d bin && mkdir bin) || true
 
 build-tweet:
-	cd tweet && go build -ldflags "-s -w" && mv tweet ../bin/
+	cd tweet && GO111MODULE=on go build -ldflags "-s -w" && mv tweet ../bin/
 
 deploy:
 	sls deploy
