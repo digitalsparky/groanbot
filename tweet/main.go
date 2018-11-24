@@ -75,10 +75,8 @@ func GetJoke() (Joke, error) {
 	}
 
 	joke := Joke{}
-	jsonErr := json.Unmarshal(body, &joke)
-	if jsonErr != nil {
-
-		return joke, jsonErr
+	if err := json.Unmarshal(body, &joke); err != nil {
+		return joke, err
 	}
 
 	return joke, nil
@@ -93,8 +91,7 @@ func SendTweet(tweet string, twitterAccessKey string, twitterAccessSecret string
 	// Twitter client
 	client := twitter.NewClient(httpClient)
 
-	_, _, err := client.Statuses.Update(tweet, nil)
-	if err != nil {
+	if _, _, err := client.Statuses.Update(tweet, nil); err != nil {
 		return err
 	}
 	return nil
@@ -149,10 +146,10 @@ func HandleRequest() (string, error) {
 	jokeTweet := fmt.Sprintf("%s #dadjokes", joke.Joke)
 
 	// Send the joke to twitter
-	sendError := SendTweet(jokeTweet, twitterAccessKey, twitterAccessSecret, twitterConsumerKey, twitterConsumerSecret)
-	if sendError != nil {
-		return "Failed to send", sendError
+	if err := SendTweet(jokeTweet, twitterAccessKey, twitterAccessSecret, twitterConsumerKey, twitterConsumerSecret); err != nil {
+		return "Failed to send", err
 	}
+
 	return "Sent!", nil
 }
 
