@@ -6,9 +6,11 @@ provider:
   runtime: go1.x
   region: ${env:AWS_DEFAULT_REGION, 'us-east-2'}
   stage: ${env:GROANBOT_BUILD_STAGE, 'prod'}
+  memorySize: 512
+  versionFunctions: false
   iamRoleStatementsInherit: true
   iamRoleStatements:
-    - Effect: "Allow"        
+    - Effect: "Allow"
       Action: ssm:GetParameter
       Resource: arn:aws:ssm:${env:AWS_DEFAULT_REGION, 'us-east-2'}:${env:AWS_ACCOUNT_ID, '1111222233334444'}:parameter/groanbot/*
 
