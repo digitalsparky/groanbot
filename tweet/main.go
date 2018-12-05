@@ -143,7 +143,7 @@ func HandleRequest() (string, error) {
 		return "", err
 	}
 
-	jokeTweet := fmt.Sprintf("%s #dadjokes", joke.Joke)
+	jokeTweet := fmt.Sprintf("%s #pun #dadjoke", joke.Joke)
 
 	// Send the joke to twitter
 	if err := SendTweet(jokeTweet, twitterAccessKey, twitterAccessSecret, twitterConsumerKey, twitterConsumerSecret); err != nil {
