@@ -8,7 +8,7 @@ Check out my twitter at twitter.com/digitalsparky
 
 This project uses Golang with GO111MODULES enabled.
 
-You will need the following environment variables to build:
+You will need the following environment variables to deploy:
 
 ```
 AWS_ACCOUNT_ID="<your account id>" - [REQUIRED] - This defaults to "1111222233334444" and must be changed
