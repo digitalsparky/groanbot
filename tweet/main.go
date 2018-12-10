@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+    "log"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -16,6 +17,9 @@ import (
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/dghubble/oauth1"
 )
+
+// Version
+var Version string
 
 // Joke JSON object
 type Joke struct {
@@ -154,5 +158,6 @@ func HandleRequest() (string, error) {
 }
 
 func main() {
+    log.Printf("GroanBot %s\n", Version)
 	lambda.Start(HandleRequest)
 }

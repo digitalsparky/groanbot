@@ -6,12 +6,14 @@ mkbindir:
 	(test ! -d bin && mkdir bin) || true
 
 build-tweet:
-	cd tweet && GO111MODULE=on go build -ldflags "-s -w" && ../upx -qq --brute tweet && mv tweet ../bin/
+	make -C tweet
+	mv tweet/tweet bin/
 
 deploy:
 	sls deploy
 
 clean:
-	rm -f bin/*
+	rm -rf bin
+	make -C tweet clean
 
 .PHONY: build
