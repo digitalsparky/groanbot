@@ -171,7 +171,7 @@ func HandleRequest() {
 			continue
 		}
 
-		// If we get here we've found a relevant tweet, exit the loop
+		// If we get here we've found a tweet, exit the loop
 		invalidJoke = false
 	}
 
