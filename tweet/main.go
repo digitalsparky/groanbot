@@ -178,8 +178,15 @@ func HandleRequest() {
 	// Generate the tweet string
 	jokeTweet := fmt.Sprintf(tweetFormat, joke.Joke)
 
-	// Send the joke to twitter
-	SendTweet(jokeTweet, twitterAccessKey, twitterAccessSecret, twitterConsumerKey, twitterConsumerSecret)
+	// If the string is greater than 280 characters, let's split it up so they get the full groan
+	if len(jokeTweet) > 280 {
+		// Split by words, get the most amount of words + length of template
+
+	} else {
+		// Send the joke to twitter
+		SendTweet(jokeTweet, twitterAccessKey, twitterAccessSecret, twitterConsumerKey, twitterConsumerSecret)
+	}
+
 }
 
 func init() {

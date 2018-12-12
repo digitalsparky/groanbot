@@ -13,6 +13,29 @@ provider:
     - Effect: "Allow"
       Action: ssm:GetParameter
       Resource: arn:aws:ssm:${env:AWS_DEFAULT_REGION, 'us-east-2'}:${env:AWS_ACCOUNT_ID, '1111222233334444'}:parameter/groanbot/*
+    - Effect: "Allow"
+      Action:
+        - dynamodb:DeleteItem
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:Scan
+      Resource: arn:aws:dynamodb:*:*:table/groanbot
+
+resources:
+  Resources:
+    DynamoDbTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: groanbot
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: N
+        KeySchema:
+          - AttributeName: id
+            KeyType: NUMBER
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
 
 package:
  exclude:
