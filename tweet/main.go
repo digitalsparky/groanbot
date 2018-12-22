@@ -35,7 +35,7 @@ type Twitter struct {
 	ConsumerSecret string
 }
 
-func (t *Twitter) Init() {
+func (t *Twitter) Setup() {
 	// Setup the new oauth client
 	t.Config = oauth1.NewConfig(twitterConsumerKey, twitterConsumerSecret)
 	t.Token = oauth1.NewToken(twitterAccessKey, twitterAccessSecret)
