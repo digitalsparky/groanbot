@@ -27,6 +27,73 @@ type Joke struct {
 	Status int    `json:"status"`
 }
 
+// Twitter Access
+type Twitter struct {
+	AccessKey      string
+	AccessSecret   string
+	ConsumerKey    string
+	ConsumerSecret string
+}
+
+func (t *Twitter) Init() {
+	// Setup the new oauth client
+	t.Config = oauth1.NewConfig(twitterConsumerKey, twitterConsumerSecret)
+	t.Token = oauth1.NewToken(twitterAccessKey, twitterAccessSecret)
+	t.HttpClient = config.Client(oauth1.NoContext, token)
+
+	// Twitter client
+	t.Client = twitter.NewClient(httpClient)
+
+	// Get the access keys from SSM, we do this first as there's no point continuing if we can't get them.
+	t.AccessKey = GetSSMValue(os.Getenv("TWITTER_ACCESS_KEY"))
+	t.AccessSecret = GetSSMValue(os.Getenv("TWITTER_ACCESS_SECRET"))
+	t.ConsumerKey = GetSSMValue(os.Getenv("TWITTER_CONSUMER_KEY"))
+	t.ConsumerSecret = GetSSMValue(os.Getenv("TWITTER_CONSUMER_SECRET"))
+
+	if t.twitterConsumerKey == "" {
+		log.Fatal("Twitter consumer key can not be null")
+	}
+
+	if t.twitterConsumerSecret == "" {
+		log.Fatal("Twitter consumer secret can not be null")
+	}
+
+	if t.twitterAccessKey == "" {
+		log.Fatal("Twitter access key can not be null")
+	}
+
+	if t.twitterAccessSecret == "" {
+		log.Fatal("Twitter access secret can not be null")
+	}
+
+	// This is the format of the tweet, ie: Mature puns are fully groan #pun #dadjoke
+	t.TweetFormat = "%s #pun #dadjoke"
+}
+
+// Send the tweet to twitter
+func (t *Twitter) Send(tweet string) {
+	if _, _, err := t.client.Statuses.Update(tweet, nil); err != nil {
+		log.Fatalf("Error sending tweet to twitter: %s\n", err)
+	}
+}
+
+// Check30Days
+// We want to make sure that we've not tweeted the joke in the last 30 days
+// So we get the currently list of tweets and make sure it's not in there
+// Before sending the tweet
+func (t *Twitter) Check30Days(tweet string) bool {
+	// Set the format
+	tweetMessage := fmt.Sprintf(t.TweetFormat, tweet)
+
+	// Get the latest 30 days of tweets from twitter
+
+	// Check to make sure tweetMessage isn't in the last 30 days
+
+	// If it's in the last 30 days, return true, otherwise false
+
+	return false
+}
+
 // GetSSMValue - Get the encrypted value from SSM
 func GetSSMValue(keyname string) string {
 
@@ -80,90 +147,36 @@ func GetJoke() Joke {
 	// Tell the remote server to send us JSON
 	req.Header.Set("Accept", "application/json")
 
-	// Execute the request
-	res, getErr := httpClient.Do(req)
-	if getErr != nil {
-		// We got an error, lets bail out, we can't do anything more
-		log.Fatalf("Error occurred retrieving joke from API: %s\n", getErr)
-	}
-
-	// BGet the body from the result
-	body, readErr := ioutil.ReadAll(res.Body)
-	if readErr != nil {
-		// This shouldn't happen, but if it does, error out.
-		log.Fatalf("Error occurred reading from result body: %s\n", readErr)
-	}
-
-	// Create a new joke object and unmarshal the JSON response to the Joke struct
-	joke := Joke{}
-	if err := json.Unmarshal(body, &joke); err != nil {
-		// Invalid JSON was received, bail out
-		log.Fatalf("Error occurred decoding joke: %s\n", err)
-	}
-
-	// Return the valid joke response
-	return joke
-}
-
-// SendTweet - Login to twitter via API and send the tweet
-func SendTweet(tweet string, twitterAccessKey string, twitterAccessSecret string, twitterConsumerKey string, twitterConsumerSecret string) {
-
-	// Setup the new oauth client
-	config := oauth1.NewConfig(twitterConsumerKey, twitterConsumerSecret)
-	token := oauth1.NewToken(twitterAccessKey, twitterAccessSecret)
-	httpClient := config.Client(oauth1.NoContext, token)
-
-	// Twitter client
-	client := twitter.NewClient(httpClient)
-
-	// Send the tweet to twitter
-	if _, _, err := client.Statuses.Update(tweet, nil); err != nil {
-		log.Fatalf("Error sending tweet to twitter: %s\n", err)
-	}
-}
-
-// HandleRequest - Handle the incoming Lambda request
-func HandleRequest() {
-
-	// Get the access keys from SSM, we do this first as there's no point continuing if we can't get them.
-	twitterAccessKey := GetSSMValue(os.Getenv("TWITTER_ACCESS_KEY"))
-	twitterAccessSecret := GetSSMValue(os.Getenv("TWITTER_ACCESS_SECRET"))
-	twitterConsumerKey := GetSSMValue(os.Getenv("TWITTER_CONSUMER_KEY"))
-	twitterConsumerSecret := GetSSMValue(os.Getenv("TWITTER_CONSUMER_SECRET"))
-
-	if twitterConsumerKey == "" {
-		log.Fatal("Twitter consumer key can not be null")
-	}
-
-	if twitterConsumerSecret == "" {
-		log.Fatal("Twitter consumer secret can not be null")
-	}
-
-	if twitterAccessKey == "" {
-		log.Fatal("Twitter access key can not be null")
-	}
-
-	if twitterAccessSecret == "" {
-		log.Fatal("Twitter access secret can not be null")
-	}
-
-	// This is the format of the tweet, ie: Mature puns are fully groan #pun #dadjoke
-	tweetFormat := "%s #pun #dadjoke"
-
-	var joke Joke
-	var jokeTweet string
 	invalidJoke := true
 	try := 0
 	maxTries := 3
 
+	var joke Joke
+
 	for invalidJoke {
+		// Execute the request
+		res, getErr := httpClient.Do(req)
+		if getErr != nil {
+			// We got an error, lets bail out, we can't do anything more
+			log.Fatalf("Error occurred retrieving joke from API: %s\n", getErr)
+		}
+
+		// BGet the body from the result
+		body, readErr := ioutil.ReadAll(res.Body)
+		if readErr != nil {
+			// This shouldn't happen, but if it does, error out.
+			log.Fatalf("Error occurred reading from result body: %s\n", readErr)
+		}
+
+		if err := json.Unmarshal(body, &joke); err != nil {
+			// Invalid JSON was received, bail out
+			log.Fatalf("Error occurred decoding joke: %s\n", err)
+		}
+
 		// We're only going to try maxTries times, otherwise we'll fatal out.
 		if try >= maxTries {
 			log.Fatal("Exiting after attempts to retrieve joke failed.")
 		}
-
-		// Get a joke
-		joke = GetJoke()
 
 		// Make sure it's not 0 characters
 		if len(joke.Joke) == 0 {
@@ -171,21 +184,26 @@ func HandleRequest() {
 			continue
 		}
 
+		// check to make sure the tweet hasn't been sent before
+		if t.Check30Days(joke.Joke) {
+			continue
+		}
+
 		// If we get here we've found a tweet, exit the loop
 		invalidJoke = false
 	}
 
-	// Generate the tweet string
-	jokeTweet := fmt.Sprintf(tweetFormat, joke.Joke)
+	// Return the valid joke response
+	return joke
+}
 
-	// If the string is greater than 280 characters, let's split it up so they get the full groan
-	if len(jokeTweet) > 280 {
-		// Split by words, get the most amount of words + length of template
 
-	} else {
-		// Send the joke to twitter
-		SendTweet(jokeTweet, twitterAccessKey, twitterAccessSecret, twitterConsumerKey, twitterConsumerSecret)
-	}
+// HandleRequest - Handle the incoming Lambda request
+func HandleRequest() {
+	twitter := new Twitter
+	twitter.Setup()
+	joke := GetJoke()
+	twitter.Send(joke.Joke)
 
 }
 
