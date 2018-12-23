@@ -283,9 +283,7 @@ func setRunningEnvironment() {
 		Env = "development"
 	}
 
-	if Env == "production" {
-		Version = os.Getenv("BUILD_VER")
-	} else {
+	if Env != "production" {
 		Version = Env
 	}
 }

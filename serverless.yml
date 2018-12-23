@@ -49,7 +49,7 @@ functions:
     events:
       - schedule: cron(0 12 * * ? *)
     environment:
-      APP_ENV:= "production"
+      APP_ENV: "production"
       TWITTER_SCREEN_NAME: "GroanBot"
       TWITTER_CONSUMER_KEY: "/groanbot/twitter_consumer_key"
       TWITTER_CONSUMER_SECRET: "/groanbot/twitter_consumer_secret"
