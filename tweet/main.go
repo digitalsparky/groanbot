@@ -14,11 +14,15 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/dghubble/oauth1"
+	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 )
 
 // Version
 var Version string
+
+// Environment
+var Env string
 
 // Joke JSON object
 type Joke struct {
@@ -29,73 +33,123 @@ type Joke struct {
 
 // Twitter Access
 type Twitter struct {
-	AccessKey      string
-	AccessSecret   string
-	ConsumerKey    string
-	ConsumerSecret string
+	config      *oauth1.Config
+	token       *oauth1.Token
+	httpClient  *http.Client
+	client      *twitter.Client
+	tweetFormat string
+	screenName  string
 }
 
 func (t *Twitter) Setup() {
-	// Setup the new oauth client
-	t.Config = oauth1.NewConfig(twitterConsumerKey, twitterConsumerSecret)
-	t.Token = oauth1.NewToken(twitterAccessKey, twitterAccessSecret)
-	t.HttpClient = config.Client(oauth1.NoContext, token)
+	log.Debug("Setting up twitter client")
+	var twitterAccessKey string
+	var twitterAccessSecret string
+	var twitterConsumerKey string
+	var twitterConsumerSecret string
 
-	// Twitter client
-	t.Client = twitter.NewClient(httpClient)
+	if Env == "production" {
+		// Get the access keys from SSM
+		twitterAccessKey = GetSSMValue(os.Getenv("TWITTER_ACCESS_KEY"))
+		twitterAccessSecret = GetSSMValue(os.Getenv("TWITTER_ACCESS_SECRET"))
+		twitterConsumerKey = GetSSMValue(os.Getenv("TWITTER_CONSUMER_KEY"))
+		twitterConsumerSecret = GetSSMValue(os.Getenv("TWITTER_CONSUMER_SECRET"))
+	} else {
+		// Get the access keys from ENV
+		twitterAccessKey = os.Getenv("TWITTER_ACCESS_KEY")
+		twitterAccessSecret = os.Getenv("TWITTER_ACCESS_SECRET")
+		twitterConsumerKey = os.Getenv("TWITTER_CONSUMER_KEY")
+		twitterConsumerSecret = os.Getenv("TWITTER_CONSUMER_SECRET")
+	}
 
-	// Get the access keys from SSM, we do this first as there's no point continuing if we can't get them.
-	t.AccessKey = GetSSMValue(os.Getenv("TWITTER_ACCESS_KEY"))
-	t.AccessSecret = GetSSMValue(os.Getenv("TWITTER_ACCESS_SECRET"))
-	t.ConsumerKey = GetSSMValue(os.Getenv("TWITTER_CONSUMER_KEY"))
-	t.ConsumerSecret = GetSSMValue(os.Getenv("TWITTER_CONSUMER_SECRET"))
+	twitterScreenName := os.Getenv("TWITTER_SCREEN_NAME")
 
-	if t.twitterConsumerKey == "" {
+	if twitterScreenName == "" {
+		log.Fatalf("Twitter screen name cannot be null")
+	}
+
+	if twitterConsumerKey == "" {
 		log.Fatal("Twitter consumer key can not be null")
 	}
 
-	if t.twitterConsumerSecret == "" {
+	if twitterConsumerSecret == "" {
 		log.Fatal("Twitter consumer secret can not be null")
 	}
 
-	if t.twitterAccessKey == "" {
+	if twitterAccessKey == "" {
 		log.Fatal("Twitter access key can not be null")
 	}
 
-	if t.twitterAccessSecret == "" {
+	if twitterAccessSecret == "" {
 		log.Fatal("Twitter access secret can not be null")
 	}
 
+	log.Debug("Setting up oAuth for twitter")
+	// Setup the new oauth client
+	t.config = oauth1.NewConfig(twitterConsumerKey, twitterConsumerSecret)
+	t.token = oauth1.NewToken(twitterAccessKey, twitterAccessSecret)
+	t.httpClient = t.config.Client(oauth1.NoContext, t.token)
+
+	// Twitter client
+	t.client = twitter.NewClient(t.httpClient)
+
+	// Set the screen name for later use
+	t.screenName = twitterScreenName
+
 	// This is the format of the tweet, ie: Mature puns are fully groan #pun #dadjoke
-	t.TweetFormat = "%s #pun #dadjoke"
+	t.tweetFormat = "%s #pun #dadjoke"
+	log.Debug("Twitter client setup complete")
+}
+
+func (t *Twitter) GetTweetString(tweet string) string {
+	return fmt.Sprintf(t.tweetFormat, tweet)
 }
 
 // Send the tweet to twitter
 func (t *Twitter) Send(tweet string) {
-	if _, _, err := t.client.Statuses.Update(tweet, nil); err != nil {
-		log.Fatalf("Error sending tweet to twitter: %s\n", err)
+	log.Debug("Sending tweet")
+	if Env != "production" {
+		log.Infof("Non production mode, would've tweeted: %s", tweet)
+	}
+	if Env == "production" {
+		if _, _, err := t.client.Statuses.Update(tweet, nil); err != nil {
+			log.Fatalf("Error sending tweet to twitter: %s", err)
+		}
 	}
 }
 
-// Check30Days
-// We want to make sure that we've not tweeted the joke in the last 30 days
+// CheckLast30
+// We want to make sure that we've not tweeted the joke in the last 30 tweets
 // So we get the currently list of tweets and make sure it's not in there
 // Before sending the tweet
-func (t *Twitter) Check30Days(tweet string) bool {
-	// Set the format
-	tweetMessage := fmt.Sprintf(t.TweetFormat, tweet)
+func (t *Twitter) CheckLast30(checkTweet string) bool {
+	log.Debug("Checking to see if the tweet appeared in the last 30 tweets")
 
-	// Get the latest 30 days of tweets from twitter
+	tweets, _, err := t.client.Timelines.UserTimeline(&twitter.UserTimelineParams{
+		ScreenName: t.screenName,
+		Count:      30,
+		TweetMode:  "extended",
+	})
 
-	// Check to make sure tweetMessage isn't in the last 30 days
+	if err != nil {
+		log.Fatalf("Error getting last 30 tweets from user: %s", err)
+	}
 
-	// If it's in the last 30 days, return true, otherwise false
+	for _, tweet := range tweets {
+		if checkTweet == tweet.Text {
+			return true
+		}
+	}
 
 	return false
 }
 
+// Twitter API constant
+var tw Twitter
+
 // GetSSMValue - Get the encrypted value from SSM
 func GetSSMValue(keyname string) string {
+	log.Debugf("Getting SSM Value for %s", keyname)
 
 	// Setup the SSM Session
 	sess, err := session.NewSessionWithOptions(session.Options{
@@ -103,7 +157,7 @@ func GetSSMValue(keyname string) string {
 		SharedConfigState: session.SharedConfigEnable,
 	})
 	if err != nil {
-		log.Fatalf("Error occurred retrieving SSM session: %s\n", err)
+		log.Fatalf("Error occurred retrieving SSM session: %s", err)
 	}
 
 	// Create a new SSM service using the SSM session with the specific region
@@ -118,7 +172,8 @@ func GetSSMValue(keyname string) string {
 
 	// If we get an error, fatal out with the error message
 	if err != nil {
-		log.Fatalf("Error occurred retrieving SSM parameter: %s\n", err)
+		log.Fatalf("Error occurred retrieving SSM parameter: %s", err)
+		os.Exit(1)
 	}
 
 	// Return the dereferenced value
@@ -138,7 +193,7 @@ func GetJoke() Joke {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		// An error has occurred that we can't recover from, bail.
-		log.Fatalf("Error occurred creating new request: %s\n", err)
+		log.Fatalf("Error occurred creating new request: %s", err)
 	}
 
 	// Set the user agent to Groanbot <verion> - twitter.com/groanbot
@@ -154,28 +209,36 @@ func GetJoke() Joke {
 	var joke Joke
 
 	for invalidJoke {
+		// We're only going to try maxTries times, otherwise we'll fatal out.
+		if try >= maxTries {
+			log.Fatal("Exiting after attempts to retrieve joke failed.")
+			os.Exit(1)
+		}
+
 		// Execute the request
+		log.Debugf("Attempting request to %s", req)
 		res, getErr := httpClient.Do(req)
 		if getErr != nil {
 			// We got an error, lets bail out, we can't do anything more
-			log.Fatalf("Error occurred retrieving joke from API: %s\n", getErr)
+			log.Errorf("Error occurred retrieving joke from API: %s", getErr)
+			try += 1
+			continue
 		}
 
 		// BGet the body from the result
 		body, readErr := ioutil.ReadAll(res.Body)
 		if readErr != nil {
 			// This shouldn't happen, but if it does, error out.
-			log.Fatalf("Error occurred reading from result body: %s\n", readErr)
+			log.Errorf("Error occurred reading from result body: %s", readErr)
+			try += 1
+			continue
 		}
 
 		if err := json.Unmarshal(body, &joke); err != nil {
 			// Invalid JSON was received, bail out
-			log.Fatalf("Error occurred decoding joke: %s\n", err)
-		}
-
-		// We're only going to try maxTries times, otherwise we'll fatal out.
-		if try >= maxTries {
-			log.Fatal("Exiting after attempts to retrieve joke failed.")
+			log.Errorf("Error occurred decoding joke: %s", err)
+			try += 1
+			continue
 		}
 
 		// Make sure it's not 0 characters
@@ -185,7 +248,8 @@ func GetJoke() Joke {
 		}
 
 		// check to make sure the tweet hasn't been sent before
-		if t.Check30Days(joke.Joke) {
+		if tw.CheckLast30(joke.Joke) {
+			try += 1
 			continue
 		}
 
@@ -197,26 +261,70 @@ func GetJoke() Joke {
 	return joke
 }
 
-
 // HandleRequest - Handle the incoming Lambda request
 func HandleRequest() {
-	twitter := new Twitter
-	twitter.Setup()
+	log.Debug("Started handling request")
+	tw.Setup()
 	joke := GetJoke()
-	twitter.Send(joke.Joke)
+	tw.Send(joke.Joke)
+}
 
+// Set the local environment
+func setRunningEnvironment() {
+	// Get the environment variable
+	switch os.Getenv("APP_ENV") {
+	case "production":
+		Env = "production"
+	case "development":
+		Env = "development"
+	case "testing":
+		Env = "testing"
+	default:
+		Env = "development"
+	}
+
+	if Env == "production" {
+		Version = os.Getenv("BUILD_VER")
+	} else {
+		Version = Env
+	}
+}
+
+func shutdown() {
+	log.Info("Shutdown request registered")
 }
 
 func init() {
+	// Set the environment
+	setRunningEnvironment()
+
 	// Set logging configuration
 	log.SetFormatter(&log.TextFormatter{
 		DisableColors: true,
 		FullTimestamp: true,
 	})
+
+	log.SetReportCaller(true)
+	switch Env {
+	case "development":
+		log.SetLevel(log.DebugLevel)
+	case "production":
+		log.SetLevel(log.ErrorLevel)
+	default:
+		log.SetLevel(log.InfoLevel)
+	}
 }
 
 func main() {
 	// Start the bot
-	log.Printf("GroanBot %s\n", Version)
-	lambda.Start(HandleRequest)
+	log.Debug("Starting main")
+	log.Printf("GroanBot %s", Version)
+	if Env == "production" {
+		lambda.Start(HandleRequest)
+	} else {
+		if err := godotenv.Load(); err != nil {
+			log.Fatal("Error loading .env file")
+		}
+		HandleRequest()
+	}
 }
