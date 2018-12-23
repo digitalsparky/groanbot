@@ -8,7 +8,7 @@ require (
 	github.com/dghubble/oauth1 v0.5.0
 	github.com/dghubble/sling v1.2.0 // indirect
 	github.com/google/go-querystring v1.0.0 // indirect
-	github.com/joho/godotenv v1.3.0 // indirect
+	github.com/joho/godotenv v1.3.0
 	github.com/sirupsen/logrus v1.2.0
 	golang.org/x/net v0.0.0-20181207154023-610586996380 // indirect
 	golang.org/x/text v0.3.0 // indirect
