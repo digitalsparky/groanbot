@@ -112,7 +112,7 @@ func (t *Twitter) Send(tweet string) {
 		log.Infof("Non production mode, would've tweeted: %s", tweet)
 	}
 	if Env == "production" {
-		if _, _, err := t.client.Statuses.Update(tweet, nil); err != nil {
+		if _, _, err := t.client.Statuses.Update(GetTweetString(tweet), nil); err != nil {
 			log.Fatalf("Error sending tweet to twitter: %s", err)
 		}
 	}
@@ -136,7 +136,7 @@ func (t *Twitter) CheckLast30(checkTweet string) bool {
 	}
 
 	for _, tweet := range tweets {
-		if checkTweet == tweet.Text {
+		if GetTweetString(checkTweet) == tweet.Text {
 			return true
 		}
 	}
