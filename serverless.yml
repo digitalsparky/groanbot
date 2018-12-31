@@ -24,7 +24,7 @@ functions:
   tweet:
     handler: bin/tweet
     events:
-      - schedule: cron(0 12 * * ? *)
+      - schedule: cron(0 */12 * * ? *)
     environment:
       APP_ENV: "production"
       TWITTER_SCREEN_NAME: "GroanBot"
