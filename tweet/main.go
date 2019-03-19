@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
@@ -24,6 +25,9 @@ var Version string
 // Environment
 var Env string
 
+// Max Retries
+var MaxRetries int
+
 // Joke JSON object
 type Joke struct {
 	ID     string `json:"id"`
@@ -33,12 +37,14 @@ type Joke struct {
 
 // Twitter Access
 type Twitter struct {
-	config      *oauth1.Config
-	token       *oauth1.Token
-	httpClient  *http.Client
-	client      *twitter.Client
-	tweetFormat string
-	screenName  string
+	config             *oauth1.Config
+	token              *oauth1.Token
+	httpClient         *http.Client
+	client             *twitter.Client
+	tweetFormat        string
+	screenName         string
+	retries            int
+	skipPreviousTweets int
 }
 
 func (t *Twitter) Setup() {
@@ -84,8 +90,38 @@ func (t *Twitter) Setup() {
 		log.Fatal("Twitter access secret can not be null")
 	}
 
-	log.Debug("Setting up oAuth for twitter")
+	// Get the retry count configuration
+	retryCount := os.Getenv("MAX_RETRIES")
+	if retryCount == "" {
+		log.Fatal("Retry count can not be null")
+	}
+
+	// Convert retryCount to integer
+	retryCountInt, err := strconv.Atoi(retryCount)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Set the converted value
+	MaxRetries = retryCountInt
+
+	// Get the previous tweets count configuration
+	skipPrevious := os.Getenv("SKIP_PREVIOUS_TWEETS")
+	if skipPrevious == "" {
+		log.Fatal("Skip Previous tweets count can not be null")
+	}
+
+	// Convert to int
+	skipPreviousInt, err := strconv.Atoi(skipPrevious)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Set the converted value
+	t.skipPreviousTweets = skipPreviousInt
+
 	// Setup the new oauth client
+	log.Debug("Setting up oAuth for twitter")
 	t.config = oauth1.NewConfig(twitterConsumerKey, twitterConsumerSecret)
 	t.token = oauth1.NewToken(twitterAccessKey, twitterAccessSecret)
 	t.httpClient = t.config.Client(oauth1.NoContext, t.token)
@@ -101,6 +137,7 @@ func (t *Twitter) Setup() {
 	log.Debug("Twitter client setup complete")
 }
 
+// Format the tweet sstring
 func (t *Twitter) GetTweetString(tweet string) string {
 	return fmt.Sprintf(t.tweetFormat, tweet)
 }
@@ -109,30 +146,32 @@ func (t *Twitter) GetTweetString(tweet string) string {
 func (t *Twitter) Send(tweet string) {
 	log.Debug("Sending tweet")
 	if Env != "production" {
+		// Non-production mode
 		log.Infof("Non production mode, would've tweeted: %s", tweet)
 	}
 	if Env == "production" {
+		// Production mode
 		if _, _, err := t.client.Statuses.Update(t.GetTweetString(tweet), nil); err != nil {
 			log.Fatalf("Error sending tweet to twitter: %s", err)
 		}
 	}
 }
 
-// CheckLast30
-// We want to make sure that we've not tweeted the joke in the last 120 tweets
+// CheckTweet
+// We want to make sure that we've not tweeted the joke in the last X tweets
 // So we get the currently list of tweets and make sure it's not in there
 // Before sending the tweet
-func (t *Twitter) CheckLast30(checkTweet string) bool {
-	log.Debug("Checking to see if the tweet appeared in the last 120 tweets")
+func (t *Twitter) CheckTweet(checkTweet string) bool {
+	log.Debugf("Checking to see if the tweet appeared in the last %d tweets", t.skipPreviousTweets)
 
 	tweets, _, err := t.client.Timelines.UserTimeline(&twitter.UserTimelineParams{
 		ScreenName: t.screenName,
-		Count:      120,
+		Count:      t.skipPreviousTweets,
 		TweetMode:  "extended",
 	})
 
 	if err != nil {
-		log.Fatalf("Error getting last 30 tweets from user: %s", err)
+		log.Fatalf("Error getting last %d tweets from user: %s", t.skipPreviousTweets, err)
 	}
 
 	for _, tweet := range tweets {
@@ -204,13 +243,12 @@ func GetJoke() Joke {
 
 	invalidJoke := true
 	try := 0
-	maxTries := 10
 
 	var joke Joke
 
 	for invalidJoke {
-		// We're only going to try maxTries times, otherwise we'll fatal out.
-		if try >= maxTries {
+		// We're only going to try MaxRetries times, otherwise we'll fatal out.
+		if try >= MaxRetries {
 			log.Fatal("Exiting after attempts to retrieve joke failed.")
 			os.Exit(1)
 		}
@@ -248,7 +286,7 @@ func GetJoke() Joke {
 		}
 
 		// check to make sure the tweet hasn't been sent before
-		if tw.CheckLast30(joke.Joke) {
+		if tw.CheckTweet(joke.Joke) {
 			try += 1
 			continue
 		}
