@@ -97,7 +97,7 @@ func (t *Twitter) Setup() {
 	t.screenName = twitterScreenName
 
 	// This is the format of the tweet, ie: Mature puns are fully groan #pun #dadjoke
-	t.tweetFormat = "%s #pun #dadjoke"
+	t.tweetFormat = "%s #pun / #dadjoke"
 	log.Debug("Twitter client setup complete")
 }
 
@@ -119,15 +119,15 @@ func (t *Twitter) Send(tweet string) {
 }
 
 // CheckLast30
-// We want to make sure that we've not tweeted the joke in the last 30 tweets
+// We want to make sure that we've not tweeted the joke in the last 120 tweets
 // So we get the currently list of tweets and make sure it's not in there
 // Before sending the tweet
 func (t *Twitter) CheckLast30(checkTweet string) bool {
-	log.Debug("Checking to see if the tweet appeared in the last 30 tweets")
+	log.Debug("Checking to see if the tweet appeared in the last 120 tweets")
 
 	tweets, _, err := t.client.Timelines.UserTimeline(&twitter.UserTimelineParams{
 		ScreenName: t.screenName,
-		Count:      30,
+		Count:      120,
 		TweetMode:  "extended",
 	})
 
@@ -204,7 +204,7 @@ func GetJoke() Joke {
 
 	invalidJoke := true
 	try := 0
-	maxTries := 3
+	maxTries := 10
 
 	var joke Joke
 
