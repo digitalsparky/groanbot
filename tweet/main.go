@@ -133,7 +133,7 @@ func (t *Twitter) Setup() {
 	t.screenName = twitterScreenName
 
 	// This is the format of the tweet, ie: Mature puns are fully groan #pun #dadjoke
-	t.tweetFormat = "%s #pun / #dadjoke"
+	t.tweetFormat = "%s #pun #dadjoke #funny"
 	log.Debug("Twitter client setup complete")
 }
 
