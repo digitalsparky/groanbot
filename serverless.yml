@@ -33,4 +33,4 @@ functions:
       TWITTER_ACCESS_KEY: "/groanbot/twitter_access_key"
       TWITTER_ACCESS_SECRET: "/groanbot/twitter_access_secret"
       MAX_RETRIES: 10
-      SKIP_PREVIOUS_TWEETS: 120
+      SKIP_PREVIOUS_TWEETS: 720
